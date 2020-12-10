@@ -1,6 +1,7 @@
 /* PCI config register */
 #define PCIR_VENDOR     0x00
 #define PCIR_DEVICE     0x02
+#define PCIR_REVID      0x08
 #define PCIR_SUBCLASS   0x0a
 #define PCIR_CLASS      0x0b
 #define PCIR_HDRTYPE    0x0e
@@ -39,12 +40,22 @@ typedef struct pci_driver {
     pci_probe probe;
 } *pci_driver;
 
+struct pci_bar {
+    u64 addr;
+    u64 size;
+    u8 type;           // PCI_BAR_IOPORT, PCI_BAR_MEMORY
+    u8 flags;          // PCI_BAR_F_*
+    u8 padding[2];
+    volatile u8 *vaddr;// mapped address (for PCI_BAR_MEMORY)
+    bytes vlen;// size of mapped memory (for PCI_BAR_MEMORY)
+} __attribute__((packed));
+
 struct pci_dev {
     int bus;
     int slot;
     int function;
     pci_driver driver;
-    u32 *msix_table;
+    struct pci_bar msix_bar;
 };
 
 void pci_cfgwrite(pci_dev dev, int reg, int bytes, u32 source);
@@ -63,6 +74,11 @@ static inline u16 pci_get_device(pci_dev dev)
 static inline u16 pci_get_subdevice(pci_dev dev)
 {
     return pci_cfgread(dev, PCIR_SUBDEV_0, 2);
+}
+
+static inline u8 pci_get_revid(pci_dev dev)
+{
+    return pci_cfgread(dev, PCIR_REVID, 1);
 }
 
 static inline u8 pci_get_class(pci_dev dev)
@@ -97,14 +113,6 @@ static inline u8 pci_get_hdrtype(pci_dev dev)
 /*
  * PCI BAR
  */
-struct pci_bar {
-    u64 addr;
-    u64 size;
-    u8 type;           // PCI_BAR_IOPORT, PCI_BAR_MEMORY
-    u8 flags;          // PCI_BAR_F_*
-    u8 padding[2];
-    volatile u8 *vaddr;// mapped address (for PCI_BAR_MEMORY)
-} __attribute__((packed));
 
 void pci_bar_init(pci_dev dev, struct pci_bar *b, int bar, bytes offset, bytes length);
 
@@ -126,8 +134,16 @@ u32 pci_find_next_cap(pci_dev dev, u8 cap, u32 cp);
 
 void pci_discover();
 void pci_set_bus_master(pci_dev dev);
-void pci_enable_msix(pci_dev dev);
+int pci_get_msix_count(pci_dev dev);
+int pci_enable_msix(pci_dev dev);
 void pci_setup_msix(pci_dev dev, int msi_slot, thunk h, const char *name);
+void pci_teardown_msix(pci_dev dev, int msi_slot);
+void pci_disable_msix(pci_dev dev);
+
+static inline u32 *pci_msix_table(pci_dev dev)
+{
+    return (u32 *)dev->msix_bar.vaddr;
+}
 
 /* PCI config header registers for all devices */
 #define PCIR_COMMAND 0x04

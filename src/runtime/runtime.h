@@ -202,6 +202,7 @@ parser parser_feed (parser p, buffer b);
 void init_random();
 u64 random_u64();
 u64 random_buffer(buffer b);
+void arc4rand(void *ptr, bytes len);
 
 typedef struct signature {
     u64 s[4];
